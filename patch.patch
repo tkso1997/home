@@ -1,0 +1,601 @@
+From be7d0e374b7702d852320591c0d1fc851776fc15 Mon Sep 17 00:00:00 2001
+From: Xavier Franquet <xavier@franquet.es>
+Date: Fri, 14 Jul 2023 15:48:59 +0200
+Subject: [PATCH] mediatek: filogic: add support ASUS RT-AX59U (based on
+ support for ASUS RT-AX59U by liushiyou006)
+
+SOC: MediaTek MT7986
+RAM: 512MB DDR4
+FLASH: 128MB SPI-NAND (Winbond W25N01GV)
+WIFI: Mediatek MT7986 DBDC 802.11ax 2.4/5 GHz
+ETH: MediaTek MT7531 Switch
+UART: 3V3 115200 8N1 (Pinout silkscreened / Do not ocnnect VCC)
+
+Stock and Alternative U-Boot layout
+
+I have several devices with an alternative layout and open access through
+SSH to an stock-OpenWrt
+
+root@OpenWrt:~# cat /proc/mtd
+dev:    size   erasesize  name
+mtd0: 00100000 00020000 "BL2"
+mtd1: 00080000 00020000 "u-boot-env"
+mtd2: 00200000 00020000 "Factory"
+mtd3: 00200000 00020000 "FIP"
+mtd4: 04000000 00020000 "UBI_DEV"
+
+root@OpenWrt:~# cat /proc/partitions
+major minor  #blocks  name
+
+  31        0       1024 mtdblock0
+  31        1        512 mtdblock1
+  31        2       2048 mtdblock2
+  31        3       2048 mtdblock3
+  31        4      65536 mtdblock4
+ 254        0      28396 ubiblock0_2
+
+Installation
+
+Install openwrt image:
+
+    Wait for stock-OpenWrt to boot. Transfer the sysupgrade image to the device using scp and install using sysupgrade.
+
+    $ sysupgrade -n <path-to-sysupgrade.bin>
+
+Signed-off-by: Xavier Franquet <xavier@franquet.es>
+---
+ .../uboot-envtools/files/mediatek_filogic     |   6 +
+ .../dts/mt7986a-asus-rt-ax59u-stock.dts       |  23 ++
+ .../dts/mt7986a-asus-rt-ax59u-ubootmod.dts    |  43 +++
+ .../mediatek/dts/mt7986a-asus-rt-ax59u.dtsi   | 271 ++++++++++++++++++
+ .../filogic/base-files/etc/board.d/02_network |  13 +
+ .../etc/hotplug.d/firmware/11-mt76-caldata    |   4 +
+ .../etc/hotplug.d/ieee80211/11_fix_wifi_mac   |   6 +
+ .../base-files/lib/preinit/10_fix_eth_mac.sh  |   9 +
+ .../base-files/lib/upgrade/platform.sh        |   6 +
+ target/linux/mediatek/image/filogic.mk        |  38 +++
+ 10 files changed, 419 insertions(+)
+ create mode 100644 target/linux/mediatek/dts/mt7986a-asus-rt-ax59u-stock.dts
+ create mode 100644 target/linux/mediatek/dts/mt7986a-asus-rt-ax59u-ubootmod.dts
+ create mode 100644 target/linux/mediatek/dts/mt7986a-asus-rt-ax59u.dtsi
+
+diff --git a/package/boot/uboot-envtools/files/mediatek_filogic b/package/boot/uboot-envtools/files/mediatek_filogic
+index 4fb1af82183ee..7e8ba87a67e6b 100644
+--- a/package/boot/uboot-envtools/files/mediatek_filogic
++++ b/package/boot/uboot-envtools/files/mediatek_filogic
+@@ -37,6 +37,12 @@ bananapi,bpi-r3)
+ 		;;
+ 	esac
+ 	;;
++asus,rt-ax59u)
++	ubootenv_add_uci_config "/dev/mtd0" "0x100000" "0x20000" "0x20000"
++	;;
++asus,rt-ax59u-ubootmod)
++	ubootenv_add_uci_config "/dev/mtd1" "0x0" "0x20000" "0x20000"
++	;;
+ glinet,gl-mt3000)
+ 	ubootenv_add_uci_config "/dev/mtd1" "0x0" "0x80000" "0x20000"
+ 	;;
+diff --git a/target/linux/mediatek/dts/mt7986a-asus-rt-ax59u-stock.dts b/target/linux/mediatek/dts/mt7986a-asus-rt-ax59u-stock.dts
+new file mode 100644
+index 0000000000000..ded14df3f1281
+--- /dev/null
++++ b/target/linux/mediatek/dts/mt7986a-asus-rt-ax59u-stock.dts
+@@ -0,0 +1,23 @@
++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
++
++/dts-v1/;
++#include "mt7986a-asus-rt-ax59u.dtsi"
++
++/ {
++	model = "ASUS RT-AX59U (Stock U-Boot layout)";
++	compatible = "asus,rt-ax59u", "mediatek,mt7986a";
++};
++
++&partitions {
++    partition@0 {
++        label = "Bootloader";
++        reg = <0x0 0x400000>;
++        read-only;
++    };
++
++    partition@400000 {
++        label = "UBI_DEV";
++        reg = <0x400000 0x7c00000>;
++
++    };
++};
+diff --git a/target/linux/mediatek/dts/mt7986a-asus-rt-ax59u-ubootmod.dts b/target/linux/mediatek/dts/mt7986a-asus-rt-ax59u-ubootmod.dts
+new file mode 100644
+index 0000000000000..833313a8b1524
+--- /dev/null
++++ b/target/linux/mediatek/dts/mt7986a-asus-rt-ax59u-ubootmod.dts
+@@ -0,0 +1,43 @@
++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
++
++/dts-v1/;
++#include "mt7986a-asus-rt-ax59u.dtsi"
++
++/ {
++	model = "ASUS RT-AX59U (Alternative U-Boot layout)";
++	compatible = "asus,rt-ax59u-ubootmod", "mediatek,mt7986a";
++};
++
++&partitions {
++	partition@0 {
++		label = "BL2";
++		reg = <0x00000 0x0100000>;
++		read-only;
++	};
++
++	partition@100000 {
++		label = "u-boot-env";
++		reg = <0x0100000 0x0080000>;
++	};
++
++	factory: partition@180000 {
++		label = "Factory";
++		reg = <0x180000 0x0200000>;
++	};
++
++	partition@380000 {
++		label = "FIP";
++		reg = <0x380000 0x0200000>;
++	};
++
++	partition@580000 {
++		label = "UBI_DEV";
++		reg = <0x580000 0x4000000>;
++
++	};
++
++};
++
++&wifi {
++	mediatek,mtd-eeprom = <&factory 0x0>;
++};
+diff --git a/target/linux/mediatek/dts/mt7986a-asus-rt-ax59u.dtsi b/target/linux/mediatek/dts/mt7986a-asus-rt-ax59u.dtsi
+new file mode 100644
+index 0000000000000..2d88a11d47b7b
+--- /dev/null
++++ b/target/linux/mediatek/dts/mt7986a-asus-rt-ax59u.dtsi
+@@ -0,0 +1,271 @@
++// SPDX-License-Identifier: (GPL-2.0 OR MIT)
++
++/dts-v1/;
++#include <dt-bindings/input/input.h>
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/leds/common.h>
++
++#include "mt7986a.dtsi"
++
++/ {
++	aliases {
++		serial0 = &uart0;
++		led-boot = &led_green;
++		led-failsafe = &led_red;
++		led-running = &led_green;
++		led-upgrade = &led_blue;
++	};
++
++	chosen {
++		stdout-path = "serial0:115200n8";
++		bootargs-override = "ubi.mtd=UBI_DEV";
++	};
++
++	memory {
++		reg = <0 0x40000000 0 0x20000000>;
++	};
++
++	keys {
++		compatible = "gpio-keys";
++
++		reset {
++			label = "reset";
++			gpios = <&pio 10 GPIO_ACTIVE_LOW>;
++			linux,code = <KEY_RESTART>;
++		};
++
++		mesh {
++			label = "wps";
++			gpios = <&pio 9 GPIO_ACTIVE_LOW>;
++			linux,code = <KEY_WPS_BUTTON>;
++		};
++	};
++
++	leds {
++		compatible = "gpio-leds";
++
++		led_green: green {
++			label = "green:system";
++			gpios = <&pio 11 GPIO_ACTIVE_LOW>;
++		};
++
++		led_red: red {
++			label = "red:system";
++			gpios = <&pio 12 GPIO_ACTIVE_LOW>;
++		};
++
++		led_blue: blue {
++			label = "blue:system";
++			gpios = <&pio 13 GPIO_ACTIVE_LOW>;
++		};
++
++
++	};
++
++	reg_3p3v: regulator-3p3v {
++		compatible = "regulator-fixed";
++		regulator-name = "fixed-3.3V";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		regulator-boot-on;
++		regulator-always-on;
++	};
++
++	reg_5v: regulator-5v {
++		compatible = "regulator-fixed";
++		regulator-name = "fixed-5V";
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++		regulator-boot-on;
++		regulator-always-on;
++	};
++};
++
++&crypto {
++       status = "okay";
++};
++
++&eth {
++	status = "okay";
++
++	gmac0: mac@0 {
++		/* LAN */
++		compatible = "mediatek,eth-mac";
++		reg = <0>;
++		phy-mode = "2500base-x";
++
++		fixed-link {
++			speed = <2500>;
++			full-duplex;
++			pause;
++		};
++	};
++
++	mdio: mdio-bus {
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		phy5: phy@5 {
++			compatible = "ethernet-phy-id67c9.de0a";
++			reg = <5>;
++			reset-gpios = <&pio 6 1>;
++			reset-deassert-us = <20000>;
++			phy-mode = "2500base-x";
++		};
++
++		phy6: phy@6 {
++			compatible = "ethernet-phy-id67c9.de0a";
++			reg = <6>;
++			phy-mode = "2500base-x";
++		};
++
++		switch@0 {
++			compatible = "mediatek,mt7531";
++			reg = <31>;
++			reset-gpios = <&pio 5 0>;
++
++			ports {
++				#address-cells = <1>;
++				#size-cells = <0>;
++
++				port@1 {
++					reg = <1>;
++					label = "wan";
++				};	
++
++				port@2 {
++					reg = <2>;
++					label = "lan1";
++				};
++
++				port@3 {
++					reg = <3>;
++					label = "lan2";
++				};
++
++				port@4 {
++					reg = <4>;
++					label = "lan3";
++				};
++
++				port@6 {
++					reg = <6>;
++					label = "cpu";
++					ethernet = <&gmac0>;
++					phy-mode = "2500base-x";
++
++					fixed-link {
++						speed = <2500>;
++						full-duplex;
++						pause;
++					};
++				};
++			};
++		};
++	};
++};
++
++&pio {
++	spi_flash_pins: spi-flash-pins-33-to-38 {
++		mux {
++			function = "spi";
++			groups = "spi0", "spi0_wp_hold";
++		};
++		conf-pu {
++			pins = "SPI2_CS", "SPI2_HOLD", "SPI2_WP";
++			drive-strength = <8>;
++			mediatek,pull-up-adv = <0>; /* bias-disable */
++		};
++		conf-pd {
++			pins = "SPI2_CLK", "SPI2_MOSI", "SPI2_MISO";
++			drive-strength = <8>;
++			mediatek,pull-down-adv = <0>; /* bias-disable */
++		};
++	};
++
++	wf_2g_5g_pins: wf_2g_5g-pins {
++		mux {
++			function = "wifi";
++			groups = "wf_2g", "wf_5g";
++		};
++		conf {
++			pins = "WF0_HB1", "WF0_HB2", "WF0_HB3", "WF0_HB4",
++			       "WF0_HB0", "WF0_HB0_B", "WF0_HB5", "WF0_HB6",
++			       "WF0_HB7", "WF0_HB8", "WF0_HB9", "WF0_HB10",
++			       "WF0_TOP_CLK", "WF0_TOP_DATA", "WF1_HB1",
++			       "WF1_HB2", "WF1_HB3", "WF1_HB4", "WF1_HB0",
++			       "WF1_HB5", "WF1_HB6", "WF1_HB7", "WF1_HB8",
++			       "WF1_TOP_CLK", "WF1_TOP_DATA";
++			drive-strength = <4>;
++		};
++	};
++
++	wf_dbdc_pins: wf-dbdc-pins {
++		mux {
++			function = "wifi";
++			groups = "wf_dbdc";
++		};
++		conf {
++			pins = "WF0_HB1", "WF0_HB2", "WF0_HB3", "WF0_HB4",
++				"WF0_HB0", "WF0_HB0_B", "WF0_HB5", "WF0_HB6",
++				"WF0_HB7", "WF0_HB8", "WF0_HB9", "WF0_HB10",
++				"WF0_TOP_CLK", "WF0_TOP_DATA", "WF1_HB1",
++				"WF1_HB2", "WF1_HB3", "WF1_HB4", "WF1_HB0",
++				"WF1_HB5", "WF1_HB6", "WF1_HB7", "WF1_HB8",
++				"WF1_TOP_CLK", "WF1_TOP_DATA";
++			drive-strength = <4>;
++		};
++	};
++};
++
++&spi0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&spi_flash_pins>;
++	status = "okay";
++
++	spi_nand: spi_nand@0 {
++		compatible = "spi-nand";
++		#address-cells = <1>;
++		#size-cells = <1>;
++		reg = <0>;
++
++		spi-max-frequency = <20000000>;
++		spi-tx-buswidth = <4>;
++		spi-rx-buswidth = <4>;
++
++		partitions: partitions {
++			compatible = "fixed-partitions";
++			#address-cells = <1>;
++			#size-cells = <1>;
++		};
++	};
++};
++
++&watchdog {
++       status = "okay";
++};
++
++&wifi {
++	status = "okay";
++	pinctrl-names = "default", "dbdc";
++	pinctrl-0 = <&wf_2g_5g_pins>;
++	pinctrl-1 = <&wf_dbdc_pins>;
++};
++
++&trng {
++       status = "okay";
++};
++
++&uart0 {
++	status = "okay";
++};
++
++&ssusb {
++	vusb33-supply = <&reg_3p3v>;
++	vbus-supply = <&reg_5v>;
++	status = "okay";
++};
++
++&usb_phy {
++	status = "okay";
++};
+diff --git a/target/linux/mediatek/filogic/base-files/etc/board.d/02_network b/target/linux/mediatek/filogic/base-files/etc/board.d/02_network
+index 51903eeace5ab..5a77f4817387b 100644
+--- a/target/linux/mediatek/filogic/base-files/etc/board.d/02_network
++++ b/target/linux/mediatek/filogic/base-files/etc/board.d/02_network
+@@ -11,10 +11,17 @@ mediatek_setup_interfaces()
+ 	asus,tuf-ax4200)
+ 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4" eth1
+ 		;;
++<<<<<<< HEAD
+ 	netgear,wax220|\
+ 	zyxel,nwa50ax-pro)
+ 		ucidef_set_interface_lan "eth0"
+ 		;;
++=======
++	asus,rt-ax59u|\
++>>>>>>> c47d35a66c (mediatek: filogic: Add support for Asus AX59U with stock layout)
++	asus,rt-ax59u-ubootmod)
++		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3" wan
++		;;
+ 	bananapi,bpi-r3)
+ 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4 sfp2" "eth1 wan"
+ 		;;
+@@ -76,6 +83,12 @@ mediatek_setup_macs()
+ 		wan_mac="${addr}"
+ 		lan_mac="${addr}"
+ 		;;
++	asus,rt-ax59u-ubootmod)
++		CI_UBIPART="UBI_DEV"
++		addr=$(mtd_get_mac_binary "Factory" 0x4)
++		wan_mac="${addr}"
++		lan_mac="${addr}"
++		;;
+ 	bananapi,bpi-r3)
+ 		wan_mac=$(macaddr_add $(cat /sys/class/net/eth0/address) 1)
+ 		;;
+diff --git a/target/linux/mediatek/filogic/base-files/etc/hotplug.d/firmware/11-mt76-caldata b/target/linux/mediatek/filogic/base-files/etc/hotplug.d/firmware/11-mt76-caldata
+index 0fe4c6998870c..3835bdcbd08ac 100644
+--- a/target/linux/mediatek/filogic/base-files/etc/hotplug.d/firmware/11-mt76-caldata
++++ b/target/linux/mediatek/filogic/base-files/etc/hotplug.d/firmware/11-mt76-caldata
+@@ -9,10 +9,14 @@ board=$(board_name)
+ case "$FIRMWARE" in
+ "mediatek/mt7986_eeprom_mt7976_dbdc.bin")
+ 	case "$board" in
++	asus,rt-ax59u|\
+ 	asus,tuf-ax4200)
+ 		CI_UBIPART="UBI_DEV"
+ 		caldata_extract_ubi "Factory" 0x0 0x1000
+ 		;;
++	asus,rt-ax59u-ubootmod)
++		caldata_extract "Factory" 0x0 0x1000
++		;;
+ 	esac
+ 	;;
+ *)
+diff --git a/target/linux/mediatek/filogic/base-files/lib/preinit/10_fix_eth_mac.sh b/target/linux/mediatek/filogic/base-files/lib/preinit/10_fix_eth_mac.sh
+index cfddd9cedcccc..9d46e2626de03 100644
+--- a/target/linux/mediatek/filogic/base-files/lib/preinit/10_fix_eth_mac.sh
++++ b/target/linux/mediatek/filogic/base-files/lib/preinit/10_fix_eth_mac.sh
+@@ -8,6 +8,15 @@ preinit_set_mac_address() {
+ 		ip link set dev eth0 address "$addr"
+ 		ip link set dev eth1 address "$addr"
+ 		;;
++	asus,rt-ax59u)
++		CI_UBIPART="UBI_DEV"
++		addr=$(mtd_get_mac_binary_ubi "Factory" 0x4)
++		ip link set dev eth0 address "$addr"
++		;;
++	asus,rt-ax59u-ubootmod)
++		addr=$(mtd_get_mac_binary "Factory" 0x4)
++		ip link set dev eth0 address "$addr"
++		;;
+ 	mercusys,mr90x-v1)
+ 		addr=$(get_mac_binary "/tmp/tp_data/default-mac" 0)
+ 		ip link set dev eth1 address "$(macaddr_add $addr 1)"
+diff --git a/target/linux/mediatek/image/filogic.mk b/target/linux/mediatek/image/filogic.mk
+index d79e929901812..4bf9670f0fe95 100644
+--- a/target/linux/mediatek/image/filogic.mk
++++ b/target/linux/mediatek/image/filogic.mk
+@@ -98,6 +98,44 @@ define Device/asus_tuf-ax4200
+ endef
+ TARGET_DEVICES += asus_tuf-ax4200
+ 
++define Device/asus_rt-ax59u
++  DEVICE_VENDOR := ASUS
++  DEVICE_MODEL := RT-AX59U (Stock U-Boot layout)
++  DEVICE_DTS := mt7986a-asus-rt-ax59u-stock
++  DEVICE_DTS_DIR := ../dts
++  DEVICE_DTS_LOADADDR := 0x47000000
++  DEVICE_PACKAGES := kmod-usb3 kmod-mt7986-firmware mt7986-wo-firmware
++  IMAGES := sysupgrade.bin
++  KERNEL := kernel-bin | lzma | \
++	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb
++  KERNEL_INITRAMFS := kernel-bin | lzma | \
++	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | pad-to 64k
++  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
++endef
++TARGET_DEVICES += asus_rt-ax59u
++
++define Device/asus_rt-ax59u-ubootmod
++  DEVICE_VENDOR := ASUS
++  DEVICE_MODEL := RT-AX59U (Alternative U-Boot layout)
++  DEVICE_DTS := mt7986a-asus-rt-ax59u-ubootmod
++  DEVICE_DTS_DIR := ../dts
++  DEVICE_DTS_LOADADDR := 0x47000000
++  DEVICE_PACKAGES := kmod-usb3 kmod-mt7986-firmware mt7986-wo-firmware
++  IMAGES := sysupgrade.bin
++  UBINIZE_OPTS := -E 5
++  BLOCKSIZE := 128k
++  PAGESIZE := 2048
++  IMAGE_SIZE := 65536k
++  KERNEL_IN_UBI := 1
++  KERNEL := kernel-bin | lzma | \
++	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb
++  KERNEL_INITRAMFS := kernel-bin | lzma | \
++	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd | pad-to 64k
++  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
++endef
++TARGET_DEVICES += asus_rt-ax59u-ubootmod
++
++
+ define Device/bananapi_bpi-r3
+   DEVICE_VENDOR := Bananapi
+   DEVICE_MODEL := BPi-R3
+diff -upr ../openwrt-orig/openwrt/target/linux/mediatek/filogic/base-files/etc/hotplug.d/ieee80211/11_fix_wifi_mac target/linux/mediatek/filogic/base-files/etc/hotplug.d/ieee80211/11_fix_wifi_mac
+--- ../openwrt-orig/openwrt/target/linux/mediatek/filogic/base-files/etc/hotplug.d/ieee80211/11_fix_wifi_mac	2023-08-07 13:58:53
++++ target/linux/mediatek/filogic/base-files/etc/hotplug.d/ieee80211/11_fix_wifi_mac	2023-08-07 14:02:20
+@@ -16,6 +16,7 @@ case "$board" in
+ 		[ "$PHYNBR" = "1" ] && cat $key_path/6gMAC > /sys${DEVPATH}/macaddress
+ 		[ "$PHYNBR" = "2" ] && cat $key_path/5gMAC > /sys${DEVPATH}/macaddress
+ 		;;
++	asus,rt-ax59u|\ 
+ 	asus,tuf-ax4200)
+ 		CI_UBIPART="UBI_DEV"
+ 		addr=$(mtd_get_mac_binary_ubi "Factory" 0x4)
+@@ -25,6 +26,11 @@ case "$board" in
+ 		[ "$PHYNBR" = "0" ] && macaddr_setbit_la $(macaddr_add $addr 1) > /sys${DEVPATH}/macaddress
+ 		[ "$PHYNBR" = "1" ] && echo "$addr" > /sys${DEVPATH}/macaddress
+ 		;;
++		asus,rt-ax59u-ubootmod)
++                addr=$(mtd_get_mac_binary "Factory" 0x4)
++                [ "$PHYNBR" = "0" ] && macaddr_setbit_la $(macaddr_add $addr 1) > /sys${DEVPATH}/macaddress
++                [ "$PHYNBR" = "1" ] && echo "$addr" > /sys${DEVPATH}/macaddress
++                ;;
+ 	bananapi,bpi-r3)
+ 		addr=$(macaddr_add $(cat /sys/class/net/eth0/address) 2)
+ 		[ "$PHYNBR" = "0" ] && macaddr_unsetbit $addr 6 > /sys${DEVPATH}/macaddress
+diff -upr ../openwrt-orig/openwrt/target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh
+--- ../openwrt-orig/openwrt/target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh	2023-08-07 13:58:53
++++ target/linux/mediatek/filogic/base-files/lib/upgrade/platform.sh	2023-08-07 14:05:04
+@@ -47,11 +47,17 @@ platform_do_upgrade() {
+ 		CI_ROOTPART="rootfs"
+ 		emmc_do_upgrade "$1"
+ 		;;
++	asus,rt-ax59u|\
+ 	asus,tuf-ax4200)
+ 		CI_UBIPART="UBI_DEV"
+ 		CI_KERNPART="linux"
+ 		nand_do_upgrade "$1"
+ 		;;
++	asus,rt-ax59u-ubootmod)
++                CI_UBIPART="UBI_DEV"
++                CI_KERNPART="kernel"
++                nand_do_upgrade "$1"
++                ;;
+ 	bananapi,bpi-r3)
+ 		local rootdev="$(cmdline_get_var root)"
+ 		rootdev="${rootdev##*/}"
+
