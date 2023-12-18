@@ -1,0 +1,61 @@
+Package: node-homebridge-hue
+Version: 0.13.70-1
+Depends: libc, node115, node-homebridge
+License: Apache-2.0
+Section: lang
+Architecture: aarch64_cortex-a53
+Installed-Size: 13954174
+Filename: node-homebridge-hue_0.13.70-1_aarch64_cortex-a53.ipk
+Size: 13849784
+SHA256sum: 724b79ca0e23710afe851a4c8346020f096a1918a7d380fbb29696438da8f2ff
+Description:  This Homebridge plugin exposes to Apple's HomeKit ZigBee devices (lights, plugs, sensors, switches, ...) connected to a Hue bridge by Signify.
+
+Package: node-homebridge
+Version: 1.7.0-3
+Depends: libc, node115, node-npm
+License: ISC Apache-2.0
+Section: lang
+Architecture: aarch64_cortex-a53
+Installed-Size: 1767850
+Filename: node-homebridge_1.7.0-3_aarch64_cortex-a53.ipk
+Size: 1768048
+SHA256sum: a8ed9a2e8dc4787045dd1be122ac39f0201b57f52c4b82f62b9cd243a94e6976
+Description:  Homebridge is a lightweight Node.js server you can run on your home network that emulates the iOS HomeKit API
+ *** You need to install avahi-nodbus-daemon or avahi-dbus-daemon or umdns or mdnsd package. ***
+
+Package: node-npm
+Version: v20.10.0-1
+Depends: libc, node115
+License: MIT
+Section: lang
+CPE-ID: cpe:/a:nodejs:node.js
+Architecture: aarch64_cortex-a53
+Installed-Size: 2194589
+Filename: node-npm_v20.10.0-1_aarch64_cortex-a53.ipk
+Size: 2191062
+SHA256sum: 389b12ce145cfe008c1d0f9d65e9dda95bf83e3bffab5e2103306df39014865b
+Description:  NPM is the package manager for NodeJS
+
+Package: node115
+Version: v20.10.0-1
+Depends: libc, libstdcpp6, libopenssl3, zlib, libnghttp2-14, libcares, libatomic1
+Provides: node
+License: MIT
+Section: lang
+ABIVersion: 115
+CPE-ID: cpe:/a:nodejs:node.js
+Architecture: aarch64_cortex-a53
+Installed-Size: 13975809
+Filename: node115_v20.10.0-1_aarch64_cortex-a53.ipk
+Size: 13851353
+SHA256sum: f484673fe6020e90fc6e40e1bd21916943f5cbd63a38c62766844cd6bd7dc757
+Description:  Node.js® is a JavaScript runtime built on Chrome's V8 JavaScript engine. Node.js uses
+ an event-driven, non-blocking I/O model that makes it lightweight and efficient. Node.js'
+ package ecosystem, npm, is the largest ecosystem of open source libraries in the world.
+ 
+ *** The following preparations must be made on the host side. ***
+ 1. gcc 10.1 or higher is required.
+ 2. To build a 32-bit target, gcc-multilib, g++-multilib are required.
+ 3. Requires libatomic package. (If necessary, install the 32-bit library at the same time.)
+ ex) sudo apt-get install gcc-multilib g++-multilib
+
